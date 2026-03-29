@@ -728,6 +728,12 @@ class CausalSelfAttention(nn.Module):
         if value_residual:
             self.vr_lambda = nn.Parameter(torch.tensor([0.5, 0.5], dtype=torch.float32))
 
+        global flash_attn_3_func
+        try:
+            self.fa3_available = flash_attn_3_func is not None
+        except NameError:
+            self.fa3_available = False
+
     def _xsa_efficient(self, y: Tensor, v: Tensor) -> Tensor:
         B, T, H, D = y.shape
         Hkv = v.size(-2)
@@ -797,7 +803,7 @@ class CausalSelfAttention(nn.Module):
 
         # --- 5. FLASH ATTENTION 3 DISPATCH ---
         # Note: FA3 explicitly expects un-transposed shapes: [B, S, H, D]
-        if 'flash_attn_3_func' in globals() and flash_attn_3_func is not None:
+        if self.fa3_available:
             y = flash_attn_3_func(q, k, v, causal=True)
         else:
             # Fallback requires transposing to [B, H, S, D]
